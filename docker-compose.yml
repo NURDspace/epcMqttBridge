@@ -7,5 +7,5 @@ services:
     build:
       context: .
       dockerfile: ./Dockerfile
-    volume:
+    volumes:
       - ./config.yml:/app/config.yml
