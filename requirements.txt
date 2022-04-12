@@ -1,0 +1,6 @@
+paho-mqtt
+beautifulsoup4
+html5lib
+coloredlogs
+pyaml
+requests

@@ -1,0 +1,13 @@
+epcs:
+  epc4:
+    name: epc4
+    ip: 10.208.30.154
+
+hass:
+  autodiscoveryTopic: homeassistant
+  pollInterval: 30 
+
+mqtt:
+  host: jarvis.vm.nurd.space
+  port: 1883
+

@@ -1,0 +1,11 @@
+version: '3.4'
+
+services:
+  epicmqttbridge:
+    image: epicmqttbridge
+    restart: always
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    volume:
+      - ./config.yml:/app/config.yml
