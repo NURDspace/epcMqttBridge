@@ -59,6 +59,14 @@ class epcMqttBridge():
 
             self.mqtt.loop(timeout=0.1, max_packets=1)
 
+    def setup_requests(self):
+        """
+            Setup a requests session so that we setup max_retries
+        """
+        self.requests = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(max_retries=10) #TODO put in config
+        self.requests.mount("http://", adapter)
+
     def on_connect(self, client, userdata, flags, rc):
         self.send_discovery()
         self.mqtt.subscribe("epc/#")
@@ -114,7 +122,7 @@ class epcMqttBridge():
             self.config = yaml.load(fin, yaml.BaseLoader)
 
     def request(self, url):
-        request = requests.get(url)
+        request = self.requests.get(url, timeout=5) #TODO add to config
         if request.status_code == 200:
             return request.content
         self.log.error(f"{url} returned {request.status_code}")
