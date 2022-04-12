@@ -38,7 +38,7 @@ class epcMqttBridge():
 
     def __init__(self) -> None:
         self.load_config()
-        
+        self.setup_requests()
         self.mqtt = paho.mqtt.client.Client()
         self.mqtt.on_connect = self.on_connect
         self.mqtt.on_message = self.on_message
@@ -121,11 +121,23 @@ class epcMqttBridge():
         with open("config.yml", "r") as fin:
             self.config = yaml.load(fin, yaml.BaseLoader)
 
-    def request(self, url):
-        request = self.requests.get(url, timeout=5) #TODO add to config
-        if request.status_code == 200:
-            return request.content
-        self.log.error(f"{url} returned {request.status_code}")
+    def request(self, url, retries=0):
+        try:
+            request = self.requests.get(url, timeout=5) #TODO add to config
+            if request.status_code == 200:
+                return request.content
+            
+            self.log.error(f"{url} returned {request.status_code}")
+            return ""
+        except Exception as e:
+            
+            if retries >= 10:
+                self.log.error(f"Giving up on retrying after {retries} attempts for error {e}")
+                return ""
+            
+            self.log.error(f"Got error {e} for {url}! Re-trying.... {retries + 1}/10")
+            retries += 1
+            self.request(url, retries)
     
     def poll_states(self):
         """ Connect to every epc, get their states and publish these over MQTT """
