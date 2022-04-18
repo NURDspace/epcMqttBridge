@@ -40,17 +40,14 @@ class epcMqttBridge():
         self.load_config()
         self.setup_requests()
         self.mqtt = paho.mqtt.client.Client()
-        self.mqtt.on_connect = self.on_connect
-        self.mqtt.on_message = self.on_message
-        self.mqtt.connect(self.config['mqtt']['host'], int(self.config['mqtt']['port']), 60)
-
+        
+        self.setup_mqtt()
         self.loop()
 
     def loop(self):
         """ 
             The polling loop, the polling interval can be set relatively high
-            because states we will transmit the new state the moment
-            it gets changed anyway. 
+            because we will transmit the new state the moment it gets changed anyway. 
         """
         while True:
             if time.time() - self.lastPoll >= int(self.config['hass']['pollInterval']):
@@ -58,6 +55,15 @@ class epcMqttBridge():
                 self.lastPoll = time.time()
 
             self.mqtt.loop(timeout=0.1, max_packets=1)
+
+    def setup_mqtt(self):
+        """ Setup paho.mqtt and connect, also gets called when we lose connection. """
+        self.mqtt.on_connect = self.on_connect
+        self.mqtt.on_message = self.on_message
+        self.mqtt.on_disconnect = self.on_disconnect
+        
+        self.log.info("Connecting to MQTT")
+        self.mqtt.connect(self.config['mqtt']['host'], int(self.config['mqtt']['port']), 60)
 
     def setup_requests(self):
         """
@@ -67,8 +73,14 @@ class epcMqttBridge():
         adapter = requests.adapters.HTTPAdapter(max_retries=10) #TODO put in config
         self.requests.mount("http://", adapter)
 
+    def on_disconnect(self, client, userdata, rc):
+        self.log.error("Disconnected from MQTT! Reconnecting.")
+        self.setup_mqtt()
+
     def on_connect(self, client, userdata, flags, rc):
+        """ Subscribe and send discovery and states once we connect """
         self.send_discovery()
+        self.poll_states()
         self.mqtt.subscribe("epc/#")
 
     def get_epc_config(self, name):
@@ -92,14 +104,15 @@ class epcMqttBridge():
 
     def send_discovery(self):
         """
-            Go over every epc defined in our config and send out a discovery for them
+            Go over every epc defined in our config and send out a discovery for each socket
         """
         for epc in self.config['epcs']:
             self.log.info(f"Sending discovery for {self.config['epcs'][epc]['name']}")
 
             for state in self.get_powerstates(self.config['epcs'][epc]['ip']):
                 topic = (f"{self.config['hass']['autodiscoveryTopic']}/switch"
-                        f"/{self.config['epcs'][epc]['name']}/{state['id']}/config")
+                        f"/{self.config['epcs'][epc]['name']}/"
+                        f"{self.config['epcs'][epc]['name']}_{state['id']}/config")
 
                 payload = {
                 "name": f"{self.config['epcs'][epc]['name']}_{state['id']}",
@@ -108,14 +121,14 @@ class epcMqttBridge():
                 "unique_id": f"{self.config['epcs'][epc]['name']}_{state['id']}",
                 "device":
                     {
-                        "identifiers": "epc",
+                        "identifiers": f"{self.config['epcs'][epc]['name']}",
                         "name": f"{self.config['epcs'][epc]['name']}",
                         "sw_version":"epc-mqtt-bridge",
                         "model":"EPC Mqtt Bridge",
                         "manufacturer":"Melan (NurdSpace)"
                     }
                 }
-            self.mqtt.publish(topic, json.dumps(payload), retain=True)
+                self.mqtt.publish(topic, json.dumps(payload), retain=True)
 
     def load_config(self):
         with open("config.yml", "r") as fin:
